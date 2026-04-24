@@ -1,33 +1,13 @@
-# Quick Start: Yuna WordPress Helper
+# Quick Start
 
-## A) Download and install
-- Download this repository ZIP from GitHub.
-- In WordPress: `Plugins` → `Add New Plugin` → `Upload Plugin`.
-- Upload ZIP, install, and activate **Yuna WordPress Helper**.
+1. Install and activate **Yuna WordPress Helper**.
+2. You are redirected to settings.
+3. Enter your GitHub token and save.
+4. Click refresh to load all repos containing `yuna-`.
+5. Use **Install / Update + Activate** per plugin.
+6. Optional: enable auto-update per plugin (not enabled by default).
+7. At page bottom use helper update section: **Need to update the helper? Click here.**
 
-## B) Connect to your public GitHub
-- Go to **Yuna Helper** in WP Admin.
-- Set **GitHub Owner** (username or organization).
-- Save and click **Refresh Catalog**.
+AI instructions URL:
 
-## C) Make your plugin repos visible
-For every plugin repo you want to manage:
-1. Create at least one GitHub Release.
-2. Use release tag matching plugin version (`v1.0.0` etc.).
-3. Add release notes (used as changelog view in helper).
-4. Add ZIP release asset for plugin install/update package.
-5. In plugin main file, set:
-   - `Version: x.y.z`
-   - `Update URI: https://github.com/OWNER/REPO`
-
-## D) Manage updates
-- In Yuna Helper table:
-  - Compare Installed vs Latest.
-  - Read release log.
-  - Click **Download ZIP** to install/update plugin package.
-
-## E) Public-repo mode security basics
-- Access restricted to WP admins (`manage_options`).
-- Settings input sanitized.
-- No GitHub token stored (public-only mode).
-- Data cached for 10 minutes.
+`https://maximebellefleur.com/yunadesign/helper/PLUGIN_ONBOARDING_AI.md`
