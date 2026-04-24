@@ -9,16 +9,18 @@ class YWHH_Plugin_Catalog
     private const CACHE_KEY = 'ywhh_catalog_cache';
     private const CACHE_TTL = 10 * MINUTE_IN_SECONDS;
 
-    public function get_catalog(string $owner, bool $force_refresh = false): array
+    public function get_catalog(string $token, bool $force_refresh = false): array
     {
+        $cache_key = self::CACHE_KEY . '_' . md5($token);
+
         if (! $force_refresh) {
-            $cached = get_transient(self::CACHE_KEY . '_' . md5($owner));
+            $cached = get_transient($cache_key);
             if (is_array($cached)) {
                 return $cached;
             }
         }
 
-        $client = new YWHH_GitHub_Client($owner);
+        $client = new YWHH_GitHub_Client($token);
         $repos  = $client->get_repositories();
 
         $installed_map = $this->get_installed_plugin_map();
@@ -26,28 +28,27 @@ class YWHH_Plugin_Catalog
 
         foreach ($repos as $repo) {
             $repo_name = (string) ($repo['name'] ?? '');
-            if ($repo_name === '') {
+            $owner = (string) ($repo['owner']['login'] ?? '');
+            if ($repo_name === '' || $owner === '') {
                 continue;
             }
 
-            $release = $client->get_latest_release($repo_name);
+            $release = $client->get_latest_release($owner, $repo_name);
             if (! $release) {
                 continue;
             }
 
-            $tag             = (string) ($release['tag_name'] ?? '');
-            $normalized_tag  = ltrim($tag, 'vV');
-            $repo_html_url   = (string) ($repo['html_url'] ?? '');
+            $tag              = (string) ($release['tag_name'] ?? '');
+            $normalized_tag   = ltrim($tag, 'vV');
+            $repo_html_url    = (string) ($repo['html_url'] ?? '');
             $installed_plugin = $installed_map[$repo_html_url] ?? null;
 
             $catalog[] = [
-                'name'              => (string) ($repo['name'] ?? ''),
+                'name'              => $repo_name,
                 'description'       => (string) ($repo['description'] ?? ''),
                 'repo_url'          => $repo_html_url,
                 'latest_version'    => $normalized_tag,
-                'latest_tag'        => $tag,
                 'release_date'      => (string) ($release['published_at'] ?? ''),
-                'release_notes'     => (string) ($release['body'] ?? ''),
                 'download_url'      => $this->resolve_download_url($release),
                 'installed_version' => $installed_plugin['version'] ?? null,
                 'installed_file'    => $installed_plugin['file'] ?? null,
@@ -62,7 +63,7 @@ class YWHH_Plugin_Catalog
             return strcmp($a['name'], $b['name']);
         });
 
-        set_transient(self::CACHE_KEY . '_' . md5($owner), $catalog, self::CACHE_TTL);
+        set_transient($cache_key, $catalog, self::CACHE_TTL);
 
         return $catalog;
     }
@@ -75,9 +76,9 @@ class YWHH_Plugin_Catalog
                     continue;
                 }
 
-                $browser_download_url = (string) ($asset['browser_download_url'] ?? '');
-                if ($browser_download_url !== '' && $this->ends_with(strtolower($browser_download_url), '.zip')) {
-                    return $browser_download_url;
+                $url = (string) ($asset['browser_download_url'] ?? '');
+                if ($url !== '' && $this->ends_with(strtolower($url), '.zip')) {
+                    return $url;
                 }
             }
         }
@@ -96,7 +97,7 @@ class YWHH_Plugin_Catalog
 
         foreach ($plugins as $file => $plugin) {
             $update_uri = trim((string) ($plugin['UpdateURI'] ?? ''));
-            if ($update_uri === '' || ! $this->starts_with($update_uri, 'https://github.com/')) {
+            if ($update_uri === '' || strpos($update_uri, 'https://github.com/') !== 0) {
                 continue;
             }
 
@@ -109,6 +110,15 @@ class YWHH_Plugin_Catalog
         return $map;
     }
 
+    private function ends_with(string $haystack, string $needle): bool
+    {
+        if ($needle === '') {
+            return true;
+        }
+
+        return substr($haystack, -strlen($needle)) === $needle;
+    }
+
     private function is_update_available(?string $installed, string $latest): bool
     {
         if (! $installed || $latest === '') {
@@ -116,21 +126,5 @@ class YWHH_Plugin_Catalog
         }
 
         return version_compare($installed, $latest, '<');
-    }
-
-    private function starts_with(string $haystack, string $needle): bool
-    {
-        return $needle === '' || strpos($haystack, $needle) === 0;
-    }
-
-    private function ends_with(string $haystack, string $needle): bool
-    {
-        if ($needle === '') {
-            return true;
-        }
-
-        $length = strlen($needle);
-
-        return substr($haystack, -$length) === $needle;
     }
 }

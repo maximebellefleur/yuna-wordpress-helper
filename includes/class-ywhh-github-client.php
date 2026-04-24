@@ -6,38 +6,25 @@ if (! defined('ABSPATH')) {
 
 class YWHH_GitHub_Client
 {
-    private string $owner;
+    private string $token;
 
-    public function __construct(string $owner)
+    public function __construct(string $token)
     {
-        $this->owner = trim($owner);
+        $this->token = trim($token);
     }
 
     public function get_repositories(): array
     {
-        if ($this->owner === '') {
+        if ($this->token === '') {
             return [];
         }
 
-        $url = sprintf(
-            'https://api.github.com/users/%s/repos?per_page=100&sort=updated',
-            rawurlencode($this->owner)
-        );
-
-        $response = wp_remote_get($url, [
+        $response = wp_remote_get('https://api.github.com/user/repos?per_page=100&sort=updated', [
             'timeout' => 20,
-            'headers' => [
-                'Accept'     => 'application/vnd.github+json',
-                'User-Agent' => 'Yuna-WordPress-Helper/' . YWHH_VERSION,
-            ],
+            'headers' => $this->headers(),
         ]);
 
-        if (is_wp_error($response)) {
-            return [];
-        }
-
-        $status = (int) wp_remote_retrieve_response_code($response);
-        if ($status !== 200) {
+        if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
             return [];
         }
 
@@ -47,39 +34,42 @@ class YWHH_GitHub_Client
         }
 
         return array_values(array_filter($body, static function ($repo): bool {
-            return is_array($repo)
-                && ! empty($repo['name'])
-                && empty($repo['fork']);
+            if (! is_array($repo) || empty($repo['name']) || ! empty($repo['fork'])) {
+                return false;
+            }
+
+            return strpos(strtolower((string) $repo['name']), 'yuna-') !== false;
         }));
     }
 
-    public function get_latest_release(string $repo): ?array
+    public function get_latest_release(string $owner, string $repo): ?array
     {
         $url = sprintf(
             'https://api.github.com/repos/%s/%s/releases/latest',
-            rawurlencode($this->owner),
+            rawurlencode($owner),
             rawurlencode($repo)
         );
 
         $response = wp_remote_get($url, [
             'timeout' => 20,
-            'headers' => [
-                'Accept'     => 'application/vnd.github+json',
-                'User-Agent' => 'Yuna-WordPress-Helper/' . YWHH_VERSION,
-            ],
+            'headers' => $this->headers(),
         ]);
 
-        if (is_wp_error($response)) {
-            return null;
-        }
-
-        $status = (int) wp_remote_retrieve_response_code($response);
-        if ($status !== 200) {
+        if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
             return null;
         }
 
         $body = json_decode((string) wp_remote_retrieve_body($response), true);
 
         return is_array($body) ? $body : null;
+    }
+
+    private function headers(): array
+    {
+        return [
+            'Accept'        => 'application/vnd.github+json',
+            'Authorization' => 'Bearer ' . $this->token,
+            'User-Agent'    => 'Yuna-WordPress-Helper/' . YWHH_VERSION,
+        ];
     }
 }
