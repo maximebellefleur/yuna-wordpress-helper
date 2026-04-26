@@ -58,13 +58,27 @@ class YWHH_Access_Manager
 
     public function sanitize_settings(array $input): array
     {
-        $existing = $this->get_settings();
+        $existing  = $this->get_settings();
+        $new_token = sanitize_text_field((string) ($input['access_token'] ?? ''));
+
+        // store_status() calls update_option() directly with all four fields in $input.
+        // Pass those through unchanged so the sanitize filter does not overwrite the
+        // freshly-written check result with stale data from $existing.
+        $last_check   = isset($input['last_check'])   ? (string) $input['last_check']   : $existing['last_check'];
+        $last_status  = isset($input['last_status'])  ? (string) $input['last_status']  : $existing['last_status'];
+        $last_message = isset($input['last_message']) ? (string) $input['last_message'] : $existing['last_message'];
+
+        // When the token itself changes (user edits the form field), clear the cached
+        // check result so the next page load is forced to re-verify.
+        if ($new_token !== $existing['access_token']) {
+            $last_check = $last_status = $last_message = '';
+        }
 
         return [
-            'access_token'  => sanitize_text_field((string) ($input['access_token'] ?? '')),
-            'last_check'    => $existing['last_check'],
-            'last_status'   => $existing['last_status'],
-            'last_message'  => $existing['last_message'],
+            'access_token' => $new_token,
+            'last_check'   => $last_check,
+            'last_status'  => $last_status,
+            'last_message' => $last_message,
         ];
     }
 
