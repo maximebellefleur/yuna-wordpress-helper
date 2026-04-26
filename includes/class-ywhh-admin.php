@@ -155,7 +155,13 @@ class YWHH_Admin
                                         <td><code><?php echo esc_html($item['latest_version']); ?></code></td>
                                         <td><input type="checkbox" name="ywhh_managed[<?php echo esc_attr($repo_url); ?>][auto_update]" <?php checked(! empty($state['auto_update'])); ?> /></td>
                                         <td>
-                                            <button type="submit" name="ywhh_run_install" value="<?php echo esc_attr($repo_url); ?>" class="button button-primary"><?php esc_html_e('Install / Update + Activate', 'yuna-wordpress-helper'); ?></button>
+                                            <?php if (! $item['installed_version']) : ?>
+                                                <button type="submit" name="ywhh_run_install" value="<?php echo esc_attr($repo_url); ?>" class="button button-primary"><?php esc_html_e('Install', 'yuna-wordpress-helper'); ?></button>
+                                            <?php elseif ($item['update_available']) : ?>
+                                                <button type="submit" name="ywhh_run_install" value="<?php echo esc_attr($repo_url); ?>" class="button button-primary"><span class="ywhh-update-badge">&#8593;</span> <?php esc_html_e('Update', 'yuna-wordpress-helper'); ?></button>
+                                            <?php else : ?>
+                                                <button type="submit" name="ywhh_run_install" value="<?php echo esc_attr($repo_url); ?>" class="button"><?php esc_html_e('Reinstall', 'yuna-wordpress-helper'); ?></button>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
