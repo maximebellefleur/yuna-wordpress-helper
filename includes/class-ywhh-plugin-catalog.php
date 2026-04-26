@@ -97,7 +97,7 @@ class YWHH_Plugin_Catalog
 
         foreach ($plugins as $file => $plugin) {
             $update_uri = trim((string) ($plugin['UpdateURI'] ?? ''));
-            if ($update_uri === '' || strpos($update_uri, 'https://github.com/') !== 0) {
+            if ($update_uri === '' || ! preg_match('#^https://github\.com/maximebellefleur/yuna-[a-z0-9._-]+/?$#i', $update_uri)) {
                 continue;
             }
 

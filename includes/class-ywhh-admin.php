@@ -8,6 +8,12 @@ class YWHH_Admin
 {
     public const OPTION_KEY = 'ywhh_settings';
     public const MANAGED_PLUGINS_OPTION = 'ywhh_managed_plugins';
+    private YWHH_Access_Manager $access_manager;
+
+    public function __construct(YWHH_Access_Manager $access_manager)
+    {
+        $this->access_manager = $access_manager;
+    }
 
     public function register_menu(): void
     {
@@ -31,6 +37,12 @@ class YWHH_Admin
                 'github_token' => '',
             ],
         ]);
+
+        register_setting('ywhh_access_settings_group', YWHH_Access_Manager::OPTION_KEY, [
+            'type'              => 'array',
+            'sanitize_callback' => [$this->access_manager, 'sanitize_settings'],
+            'default'           => $this->access_manager->get_settings(),
+        ]);
     }
 
     public function sanitize_settings(array $input): array
@@ -48,6 +60,9 @@ class YWHH_Admin
 
         $settings = $this->get_settings();
         $token = $settings['github_token'];
+        $access_settings = $this->access_manager->get_settings();
+        $last_status = $access_settings['last_status'];
+        $last_message = $access_settings['last_message'];
 
         $catalog = [];
         $force_refresh = isset($_GET['ywhh_refresh']) && check_admin_referer('ywhh_refresh_catalog');
@@ -63,6 +78,9 @@ class YWHH_Admin
         }
 
         if ($token !== '') {
+            if ($force_refresh && ! $this->verify_access_or_notice()) {
+                $force_refresh = false;
+            }
             $catalog = (new YWHH_Plugin_Catalog())->get_catalog($token, (bool) $force_refresh);
         }
 
@@ -92,6 +110,48 @@ class YWHH_Admin
                     </table>
                     <?php submit_button(__('Save Token', 'yuna-wordpress-helper')); ?>
                 </form>
+            </div>
+
+            <div class="ywhh-card">
+                <h2><?php esc_html_e('Client Access Token', 'yuna-wordpress-helper'); ?></h2>
+                <form method="post" action="options.php">
+                    <?php settings_fields('ywhh_access_settings_group'); ?>
+                    <table class="form-table" role="presentation">
+                        <tr>
+                            <th scope="row"><?php esc_html_e('Client Name', 'yuna-wordpress-helper'); ?></th>
+                            <td><input type="text" class="regular-text" name="<?php echo esc_attr(YWHH_Access_Manager::OPTION_KEY); ?>[client_name]" value="<?php echo esc_attr($access_settings['client_name']); ?>" /></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><?php esc_html_e('Client Email', 'yuna-wordpress-helper'); ?></th>
+                            <td><input type="email" class="regular-text" name="<?php echo esc_attr(YWHH_Access_Manager::OPTION_KEY); ?>[client_email]" value="<?php echo esc_attr($access_settings['client_email']); ?>" /></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><?php esc_html_e('Access Token', 'yuna-wordpress-helper'); ?></th>
+                            <td><input type="password" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr(YWHH_Access_Manager::OPTION_KEY); ?>[access_token]" value="<?php echo esc_attr($access_settings['access_token']); ?>" /></td>
+                        </tr>
+                        <tr>
+                            <th scope="row"><?php esc_html_e('Expiry (optional)', 'yuna-wordpress-helper'); ?></th>
+                            <td><input type="text" class="regular-text" name="<?php echo esc_attr(YWHH_Access_Manager::OPTION_KEY); ?>[token_expiry]" value="<?php echo esc_attr($access_settings['token_expiry']); ?>" /></td>
+                        </tr>
+                    </table>
+                    <?php submit_button(__('Save Access Data', 'yuna-wordpress-helper')); ?>
+                </form>
+                <?php if ($last_status !== '') : ?>
+                    <p>
+                        <?php
+                        echo esc_html(
+                            sprintf(
+                                __('Last check: %1$s (%2$s)', 'yuna-wordpress-helper'),
+                                $access_settings['last_check'] ?: __('never', 'yuna-wordpress-helper'),
+                                $last_status
+                            )
+                        );
+                        ?>
+                    </p>
+                    <?php if ($last_message !== '') : ?>
+                        <p><em><?php echo esc_html($last_message); ?></em></p>
+                    <?php endif; ?>
+                <?php endif; ?>
             </div>
 
             <?php if ($token !== '') : ?>
@@ -160,6 +220,10 @@ class YWHH_Admin
             return;
         }
 
+        if (! $this->verify_access_or_notice()) {
+            return;
+        }
+
         $repo_url = sanitize_text_field((string) ($_POST['ywhh_run_install'] ?? ''));
         $catalog = (new YWHH_Plugin_Catalog())->get_catalog($token, true);
 
@@ -202,6 +266,10 @@ class YWHH_Admin
 
     private function handle_helper_update(): void
     {
+        if (! $this->verify_access_or_notice()) {
+            return;
+        }
+
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
         require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 
@@ -304,5 +372,18 @@ class YWHH_Admin
         return [
             'github_token' => (string) ($settings['github_token'] ?? ''),
         ];
+    }
+
+    private function verify_access_or_notice(): bool
+    {
+        if ($this->access_manager->perform_token_check()) {
+            return true;
+        }
+
+        $access = $this->access_manager->get_settings();
+        $reason = $access['last_message'] ?: __('Token is not valid for this action.', 'yuna-wordpress-helper');
+        echo '<div class="notice notice-error"><p>' . esc_html($reason) . '</p></div>';
+
+        return false;
     }
 }

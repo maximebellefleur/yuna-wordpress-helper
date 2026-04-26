@@ -38,7 +38,11 @@ class YWHH_GitHub_Client
                 return false;
             }
 
-            return strpos(strtolower((string) $repo['name']), 'yuna-') !== false;
+            $name = strtolower((string) $repo['name']);
+            $full_name = strtolower((string) ($repo['full_name'] ?? ''));
+
+            return strpos($name, 'yuna-') === 0
+                && strpos($full_name, 'maximebellefleur/yuna-') === 0;
         }));
     }
 
