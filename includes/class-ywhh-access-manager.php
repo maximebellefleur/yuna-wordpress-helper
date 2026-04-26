@@ -8,6 +8,7 @@ class YWHH_Access_Manager
 {
     public const OPTION_KEY = 'ywhh_access_settings';
     public const CRON_HOOK = 'ywhh_monthly_token_verification';
+    private const VERIFY_ENDPOINT = 'https://maximebellefleur.com/yunadesign/helper/api/verify-token';
 
     public function register_hooks(): void
     {
@@ -48,8 +49,6 @@ class YWHH_Access_Manager
         $settings = get_option(self::OPTION_KEY, []);
 
         return [
-            'portal_url'     => (string) ($settings['portal_url'] ?? 'https://maximebellefleur.com/yunadesign'),
-            'help_page_url'  => (string) ($settings['help_page_url'] ?? 'https://maximebellefleur.com/yunadesign/help'),
             'client_name'    => (string) ($settings['client_name'] ?? ''),
             'client_email'   => (string) ($settings['client_email'] ?? ''),
             'access_token'   => (string) ($settings['access_token'] ?? ''),
@@ -65,8 +64,6 @@ class YWHH_Access_Manager
         $existing = $this->get_settings();
 
         return [
-            'portal_url'    => esc_url_raw((string) ($input['portal_url'] ?? $existing['portal_url'])),
-            'help_page_url' => esc_url_raw((string) ($input['help_page_url'] ?? $existing['help_page_url'])),
             'client_name'   => sanitize_text_field((string) ($input['client_name'] ?? '')),
             'client_email'  => sanitize_email((string) ($input['client_email'] ?? '')),
             'access_token'  => sanitize_text_field((string) ($input['access_token'] ?? '')),
@@ -100,9 +97,7 @@ class YWHH_Access_Manager
             return false;
         }
 
-        $verify_url = trailingslashit($settings['portal_url']) . 'api/verify-token';
-
-        $response = wp_remote_post($verify_url, [
+        $response = wp_remote_post(self::VERIFY_ENDPOINT, [
             'timeout' => 20,
             'headers' => [
                 'Accept' => 'application/json',
@@ -126,10 +121,14 @@ class YWHH_Access_Manager
         $body = json_decode((string) wp_remote_retrieve_body($response), true);
         $is_valid = $code === 200 && is_array($body) && ! empty($body['valid']);
 
-        $this->store_status(
-            $is_valid ? 'valid' : 'invalid',
-            $is_valid ? __('Token validated successfully.', 'yuna-wordpress-helper') : __('Token validation failed.', 'yuna-wordpress-helper')
-        );
+        $message = __('Token validation failed.', 'yuna-wordpress-helper');
+        if ($is_valid) {
+            $message = __('Token validated successfully.', 'yuna-wordpress-helper');
+        } elseif (is_array($body) && ! empty($body['reason'])) {
+            $message = sanitize_text_field((string) $body['reason']);
+        }
+
+        $this->store_status($is_valid ? 'valid' : 'invalid', $message);
 
         return $is_valid;
     }

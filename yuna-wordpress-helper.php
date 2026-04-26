@@ -21,15 +21,18 @@ define('YWHH_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-github-client.php';
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-plugin-catalog.php';
+require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-access-manager.php';
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-admin.php';
 
 final class YWHH_Plugin
 {
     private YWHH_Admin $admin;
+    private YWHH_Access_Manager $access_manager;
 
     public function __construct()
     {
-        $this->admin = new YWHH_Admin();
+        $this->access_manager = new YWHH_Access_Manager();
+        $this->admin = new YWHH_Admin($this->access_manager);
     }
 
     public function boot(): void
@@ -39,11 +42,18 @@ final class YWHH_Plugin
         add_action('admin_init', [$this, 'maybe_redirect_after_activation']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
         add_filter('auto_update_plugin', [$this, 'sync_auto_update_setting'], 10, 2);
+        $this->access_manager->register_hooks();
     }
 
     public static function activate(): void
     {
+        YWHH_Access_Manager::activate();
         set_transient('ywhh_do_activation_redirect', '1', 30);
+    }
+
+    public static function deactivate(): void
+    {
+        YWHH_Access_Manager::deactivate();
     }
 
     public function register_admin(): void
@@ -109,6 +119,7 @@ final class YWHH_Plugin
 }
 
 register_activation_hook(__FILE__, ['YWHH_Plugin', 'activate']);
+register_deactivation_hook(__FILE__, ['YWHH_Plugin', 'deactivate']);
 
 add_action('plugins_loaded', static function (): void {
     (new YWHH_Plugin())->boot();
