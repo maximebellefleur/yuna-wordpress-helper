@@ -6,8 +6,13 @@ if (! defined('ABSPATH')) {
 
 class YWHH_Admin
 {
-    public const OPTION_KEY = 'ywhh_settings';
     public const MANAGED_PLUGINS_OPTION = 'ywhh_managed_plugins';
+    private YWHH_Access_Manager $access_manager;
+
+    public function __construct(YWHH_Access_Manager $access_manager)
+    {
+        $this->access_manager = $access_manager;
+    }
 
     public function register_menu(): void
     {
@@ -24,20 +29,11 @@ class YWHH_Admin
 
     public function register_settings(): void
     {
-        register_setting('ywhh_settings_group', self::OPTION_KEY, [
+        register_setting('ywhh_access_settings_group', YWHH_Access_Manager::OPTION_KEY, [
             'type'              => 'array',
-            'sanitize_callback' => [$this, 'sanitize_settings'],
-            'default'           => [
-                'github_token' => '',
-            ],
+            'sanitize_callback' => [$this->access_manager, 'sanitize_settings'],
+            'default'           => $this->access_manager->get_settings(),
         ]);
-    }
-
-    public function sanitize_settings(array $input): array
-    {
-        return [
-            'github_token' => sanitize_text_field((string) ($input['github_token'] ?? '')),
-        ];
     }
 
     public function render_page(): void
@@ -46,14 +42,15 @@ class YWHH_Admin
             wp_die(esc_html__('You are not allowed to access this page.', 'yuna-wordpress-helper'));
         }
 
-        $settings = $this->get_settings();
-        $token = $settings['github_token'];
+        $access_settings = $this->access_manager->get_settings();
+        $last_status = $access_settings['last_status'];
+        $last_message = $access_settings['last_message'];
 
         $catalog = [];
         $force_refresh = isset($_GET['ywhh_refresh']) && check_admin_referer('ywhh_refresh_catalog');
 
         if (isset($_POST['ywhh_run_install']) && check_admin_referer('ywhh_install_plugin')) {
-            $this->handle_install_action($token);
+            $this->handle_install_action();
             $force_refresh = true;
         }
 
@@ -62,8 +59,23 @@ class YWHH_Admin
             $force_refresh = true;
         }
 
-        if ($token !== '') {
-            $catalog = (new YWHH_Plugin_Catalog())->get_catalog($token, (bool) $force_refresh);
+        if ($access_settings['access_token'] !== '') {
+            if ($force_refresh) {
+                $has_access = $this->verify_access_or_notice();
+                if (! $has_access) {
+                    $force_refresh = false;
+                }
+            }
+
+            if (! $force_refresh && $last_status === 'valid') {
+                $has_access = true;
+            } else {
+                $has_access = $this->verify_access_or_notice();
+            }
+
+            if ($has_access) {
+                $catalog = (new YWHH_Plugin_Catalog())->get_catalog((bool) $force_refresh);
+            }
         }
 
         if (isset($_POST['ywhh_save_managed']) && check_admin_referer('ywhh_save_managed_plugins')) {
@@ -76,25 +88,39 @@ class YWHH_Admin
         <div class="wrap ywhh-wrap">
             <h1><?php esc_html_e('Yuna WordPress Helper', 'yuna-wordpress-helper'); ?></h1>
             <p><strong><?php echo esc_html(sprintf(__('Helper version: %s', 'yuna-wordpress-helper'), YWHH_VERSION)); ?></strong></p>
-            <p><?php esc_html_e('Enter your token, then manage only repositories containing "yuna-".', 'yuna-wordpress-helper'); ?></p>
+            <p><?php esc_html_e('Enter your token, validate it on the minisite, then manage downloadable yuna-* plugins.', 'yuna-wordpress-helper'); ?></p>
 
             <div class="ywhh-card">
+                <h2><?php esc_html_e('Client Access Token', 'yuna-wordpress-helper'); ?></h2>
                 <form method="post" action="options.php">
-                    <?php settings_fields('ywhh_settings_group'); ?>
+                    <?php settings_fields('ywhh_access_settings_group'); ?>
                     <table class="form-table" role="presentation">
                         <tr>
-                            <th scope="row"><?php esc_html_e('GitHub Token', 'yuna-wordpress-helper'); ?></th>
-                            <td>
-                                <input type="password" class="regular-text" name="<?php echo esc_attr(self::OPTION_KEY); ?>[github_token]" value="<?php echo esc_attr($token); ?>" autocomplete="new-password" />
-                                <p class="description"><?php esc_html_e('Fine-grained token with repository read access.', 'yuna-wordpress-helper'); ?></p>
-                            </td>
+                            <th scope="row"><?php esc_html_e('Access Token', 'yuna-wordpress-helper'); ?></th>
+                            <td><input type="password" class="regular-text" autocomplete="new-password" name="<?php echo esc_attr(YWHH_Access_Manager::OPTION_KEY); ?>[access_token]" value="<?php echo esc_attr($access_settings['access_token']); ?>" /></td>
                         </tr>
                     </table>
                     <?php submit_button(__('Save Token', 'yuna-wordpress-helper')); ?>
                 </form>
+                <?php if ($last_status !== '') : ?>
+                    <p>
+                        <?php
+                        echo esc_html(
+                            sprintf(
+                                __('Last check: %1$s (%2$s)', 'yuna-wordpress-helper'),
+                                $access_settings['last_check'] ?: __('never', 'yuna-wordpress-helper'),
+                                $last_status
+                            )
+                        );
+                        ?>
+                    </p>
+                    <?php if ($last_message !== '') : ?>
+                        <p><em><?php echo esc_html($last_message); ?></em></p>
+                    <?php endif; ?>
+                <?php endif; ?>
             </div>
 
-            <?php if ($token !== '') : ?>
+            <?php if ($access_settings['access_token'] !== '') : ?>
                 <div class="ywhh-card">
                     <p>
                         <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin.php?page=yuna-wordpress-helper&ywhh_refresh=1'), 'ywhh_refresh_catalog')); ?>"><?php esc_html_e('Refresh', 'yuna-wordpress-helper'); ?></a>
@@ -152,16 +178,21 @@ class YWHH_Admin
         <?php
     }
 
-    private function handle_install_action(string $token): void
+    private function handle_install_action(): void
     {
-        if ($token === '') {
+        $access_settings = $this->access_manager->get_settings();
+        if ($access_settings['access_token'] === '') {
             echo '<div class="notice notice-error"><p>' . esc_html__('Save token first.', 'yuna-wordpress-helper') . '</p></div>';
 
             return;
         }
 
+        if (! $this->verify_access_or_notice()) {
+            return;
+        }
+
         $repo_url = sanitize_text_field((string) ($_POST['ywhh_run_install'] ?? ''));
-        $catalog = (new YWHH_Plugin_Catalog())->get_catalog($token, true);
+        $catalog = (new YWHH_Plugin_Catalog())->get_catalog(true);
 
         $target = null;
         foreach ($catalog as $item) {
@@ -202,6 +233,10 @@ class YWHH_Admin
 
     private function handle_helper_update(): void
     {
+        if (! $this->verify_access_or_notice()) {
+            return;
+        }
+
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
         require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 
@@ -297,12 +332,16 @@ class YWHH_Admin
         update_site_option('auto_update_plugins', array_values(array_keys($auto_map)));
     }
 
-    private function get_settings(): array
+    private function verify_access_or_notice(): bool
     {
-        $settings = get_option(self::OPTION_KEY, []);
+        if ($this->access_manager->perform_token_check()) {
+            return true;
+        }
 
-        return [
-            'github_token' => (string) ($settings['github_token'] ?? ''),
-        ];
+        $access = $this->access_manager->get_settings();
+        $reason = $access['last_message'] ?: __('Token is not valid for this action.', 'yuna-wordpress-helper');
+        echo '<div class="notice notice-error"><p>' . esc_html($reason) . '</p></div>';
+
+        return false;
     }
 }

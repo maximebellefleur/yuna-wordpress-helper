@@ -9,9 +9,9 @@ class YWHH_Plugin_Catalog
     private const CACHE_KEY = 'ywhh_catalog_cache';
     private const CACHE_TTL = 10 * MINUTE_IN_SECONDS;
 
-    public function get_catalog(string $token, bool $force_refresh = false): array
+    public function get_catalog(bool $force_refresh = false): array
     {
-        $cache_key = self::CACHE_KEY . '_' . md5($token);
+        $cache_key = self::CACHE_KEY;
 
         if (! $force_refresh) {
             $cached = get_transient($cache_key);
@@ -20,7 +20,7 @@ class YWHH_Plugin_Catalog
             }
         }
 
-        $client = new YWHH_GitHub_Client($token);
+        $client = new YWHH_GitHub_Client();
         $repos  = $client->get_repositories();
 
         $installed_map = $this->get_installed_plugin_map();
@@ -97,7 +97,7 @@ class YWHH_Plugin_Catalog
 
         foreach ($plugins as $file => $plugin) {
             $update_uri = trim((string) ($plugin['UpdateURI'] ?? ''));
-            if ($update_uri === '' || strpos($update_uri, 'https://github.com/') !== 0) {
+            if ($update_uri === '' || ! preg_match('#^https://github\.com/maximebellefleur/yuna-[a-z0-9._-]+/?$#i', $update_uri)) {
                 continue;
             }
 
