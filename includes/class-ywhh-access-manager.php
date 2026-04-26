@@ -108,12 +108,13 @@ class YWHH_Access_Manager
         $response = wp_remote_post(self::VERIFY_ENDPOINT, [
             'timeout' => 20,
             'headers' => [
-                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'Accept'       => 'application/json',
             ],
-            'body' => [
-                'token'  => $settings['access_token'],
-                'site'   => home_url('/'),
-            ],
+            'body' => wp_json_encode([
+                'token' => $settings['access_token'],
+                'site'  => home_url('/'),
+            ]),
         ]);
 
         if (is_wp_error($response)) {
