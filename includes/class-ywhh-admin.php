@@ -47,30 +47,29 @@ class YWHH_Admin
         $last_message = $access_settings['last_message'];
 
         $catalog = [];
-        $force_refresh = isset($_GET['ywhh_refresh']) && check_admin_referer('ywhh_refresh_catalog');
+        $force_refresh     = isset($_GET['ywhh_refresh']) && check_admin_referer('ywhh_refresh_catalog');
+        $token_just_saved  = isset($_GET['settings-updated']);
 
         if (isset($_POST['ywhh_run_install']) && check_admin_referer('ywhh_install_plugin')) {
-            $this->handle_install_action();
-            $force_refresh = true;
+            if ($this->handle_install_action()) {
+                $force_refresh = true;
+            }
         }
 
         if (isset($_POST['ywhh_helper_update']) && check_admin_referer('ywhh_helper_update')) {
-            $this->handle_helper_update();
-            $force_refresh = true;
+            if ($this->handle_helper_update()) {
+                $force_refresh = true;
+            }
         }
 
         if ($access_settings['access_token'] !== '') {
-            if ($force_refresh) {
-                $has_access = $this->verify_access_or_notice();
-                if (! $has_access) {
-                    $force_refresh = false;
-                }
-            }
-
-            if (! $force_refresh && $last_status === 'valid') {
-                $has_access = true;
+            if ($force_refresh || $token_just_saved || $last_status !== 'valid') {
+                $has_access      = $this->verify_access_or_notice();
+                $access_settings = $this->access_manager->get_settings();
+                $last_status     = $access_settings['last_status'];
+                $last_message    = $access_settings['last_message'];
             } else {
-                $has_access = $this->verify_access_or_notice();
+                $has_access = true;
             }
 
             if ($has_access) {
@@ -184,17 +183,17 @@ class YWHH_Admin
         <?php
     }
 
-    private function handle_install_action(): void
+    private function handle_install_action(): bool
     {
         $access_settings = $this->access_manager->get_settings();
         if ($access_settings['access_token'] === '') {
             echo '<div class="notice notice-error"><p>' . esc_html__('Save token first.', 'yuna-wordpress-helper') . '</p></div>';
 
-            return;
+            return false;
         }
 
         if (! $this->verify_access_or_notice()) {
-            return;
+            return false;
         }
 
         $repo_url = sanitize_text_field((string) ($_POST['ywhh_run_install'] ?? ''));
@@ -211,7 +210,7 @@ class YWHH_Admin
         if (! is_array($target) || empty($target['download_url'])) {
             echo '<div class="notice notice-error"><p>' . esc_html__('Package not found.', 'yuna-wordpress-helper') . '</p></div>';
 
-            return;
+            return false;
         }
 
         require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -226,7 +225,7 @@ class YWHH_Admin
         if (! $result || is_wp_error($result)) {
             echo '<div class="notice notice-error"><p>' . esc_html__('Install/update failed.', 'yuna-wordpress-helper') . '</p></div>';
 
-            return;
+            return false;
         }
 
         $installed_file = $this->find_plugin_file_by_repo_url((string) $target['repo_url']);
@@ -235,12 +234,14 @@ class YWHH_Admin
         }
 
         echo '<div class="notice notice-success"><p>' . esc_html__('Plugin installed/updated and activated.', 'yuna-wordpress-helper') . '</p></div>';
+
+        return true;
     }
 
-    private function handle_helper_update(): void
+    private function handle_helper_update(): bool
     {
         if (! $this->verify_access_or_notice()) {
-            return;
+            return false;
         }
 
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -253,7 +254,7 @@ class YWHH_Admin
         if (! isset($updates->response[$plugin_file])) {
             echo '<div class="notice notice-info"><p>' . esc_html__('Helper is already up to date.', 'yuna-wordpress-helper') . '</p></div>';
 
-            return;
+            return false;
         }
 
         $upgrader = new Plugin_Upgrader(new Automatic_Upgrader_Skin());
@@ -262,10 +263,12 @@ class YWHH_Admin
         if (! $result || is_wp_error($result)) {
             echo '<div class="notice notice-error"><p>' . esc_html__('Helper update failed.', 'yuna-wordpress-helper') . '</p></div>';
 
-            return;
+            return false;
         }
 
         echo '<div class="notice notice-success"><p>' . esc_html__('Helper updated successfully.', 'yuna-wordpress-helper') . '</p></div>';
+
+        return true;
     }
 
     private function find_plugin_file_by_repo_url(string $repo_url): string
