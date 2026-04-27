@@ -6,23 +6,21 @@ if (! defined('ABSPATH')) {
 
 class YWHH_GitHub_Client
 {
-    private string $token;
+    private const OWNER = 'maximebellefleur';
 
-    public function __construct(string $token)
+    public function __construct()
     {
-        $this->token = trim($token);
     }
 
     public function get_repositories(): array
     {
-        if ($this->token === '') {
-            return [];
-        }
-
-        $response = wp_remote_get('https://api.github.com/user/repos?per_page=100&sort=updated', [
+        $response = wp_remote_get(
+            sprintf('https://api.github.com/users/%s/repos?per_page=100&sort=updated', rawurlencode(self::OWNER)),
+            [
             'timeout' => 20,
             'headers' => $this->headers(),
-        ]);
+            ]
+        );
 
         if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
             return [];
@@ -42,8 +40,32 @@ class YWHH_GitHub_Client
             $full_name = strtolower((string) ($repo['full_name'] ?? ''));
 
             return strpos($name, 'yuna-') === 0
-                && strpos($full_name, 'maximebellefleur/yuna-') === 0;
+                && strpos($full_name, 'maximebellefleur/yuna-') === 0
+                && $name !== 'yuna-wordpress-helper';
         }));
+    }
+
+    public function get_repository(string $owner, string $repo): ?array
+    {
+        $response = wp_remote_get(
+            sprintf(
+                'https://api.github.com/repos/%s/%s',
+                rawurlencode($owner),
+                rawurlencode($repo)
+            ),
+            [
+                'timeout' => 20,
+                'headers' => $this->headers(),
+            ]
+        );
+
+        if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
+            return null;
+        }
+
+        $body = json_decode((string) wp_remote_retrieve_body($response), true);
+
+        return is_array($body) ? $body : null;
     }
 
     public function get_latest_release(string $owner, string $repo): ?array
@@ -71,9 +93,8 @@ class YWHH_GitHub_Client
     private function headers(): array
     {
         return [
-            'Accept'        => 'application/vnd.github+json',
-            'Authorization' => 'Bearer ' . $this->token,
-            'User-Agent'    => 'Yuna-WordPress-Helper/' . YWHH_VERSION,
+            'Accept'     => 'application/vnd.github+json',
+            'User-Agent' => 'Yuna-WordPress-Helper/' . YWHH_VERSION,
         ];
     }
 }

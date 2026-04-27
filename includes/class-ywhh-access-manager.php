@@ -47,12 +47,17 @@ class YWHH_Access_Manager
     public function get_settings(): array
     {
         $settings = get_option(self::OPTION_KEY, []);
+        $repositories = $settings['repositories'] ?? [];
+        if (! is_array($repositories)) {
+            $repositories = [];
+        }
 
         return [
             'client_name'    => (string) ($settings['client_name'] ?? ''),
             'client_email'   => (string) ($settings['client_email'] ?? ''),
             'access_token'   => (string) ($settings['access_token'] ?? ''),
             'token_expiry'   => (string) ($settings['token_expiry'] ?? ''),
+            'repositories'   => array_values(array_filter(array_map('esc_url_raw', $repositories))),
             'last_check'     => (string) ($settings['last_check'] ?? ''),
             'last_status'    => (string) ($settings['last_status'] ?? ''),
             'last_message'   => (string) ($settings['last_message'] ?? ''),
@@ -61,16 +66,47 @@ class YWHH_Access_Manager
 
     public function sanitize_settings(array $input): array
     {
-        $existing = $this->get_settings();
+        $existing  = $this->get_settings();
+        $new_name  = sanitize_text_field((string) ($input['client_name'] ?? $existing['client_name']));
+        $new_email = sanitize_email((string) ($input['client_email'] ?? $existing['client_email']));
+        $new_token  = sanitize_text_field((string) ($input['access_token'] ?? ''));
+        $new_expiry = sanitize_text_field((string) ($input['token_expiry'] ?? $existing['token_expiry']));
+        if ($new_expiry !== '' && ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $new_expiry)) {
+            $new_expiry = '';
+        }
+        $repositories = $existing['repositories'];
+        if (isset($input['repositories']) && is_array($input['repositories'])) {
+            $repositories = array_values(array_filter(array_map('esc_url_raw', $input['repositories'])));
+        }
+
+        // store_status() calls update_option() directly with the full settings array.
+        // Pass those through unchanged so the sanitize filter does not overwrite the
+        // freshly-written check result with stale data from $existing.
+        $last_check   = isset($input['last_check'])   ? (string) $input['last_check']   : $existing['last_check'];
+        $last_status  = isset($input['last_status'])  ? (string) $input['last_status']  : $existing['last_status'];
+        $last_message = isset($input['last_message']) ? (string) $input['last_message'] : $existing['last_message'];
+
+        // When token identity changes (user edits the form fields), clear the cached
+        // check result so the next page load is forced to re-verify.
+        if (
+            $new_name !== $existing['client_name']
+            || $new_email !== $existing['client_email']
+            || $new_token !== $existing['access_token']
+            || $new_expiry !== $existing['token_expiry']
+        ) {
+            $last_check = $last_status = $last_message = '';
+            $repositories = [];
+        }
 
         return [
-            'client_name'   => sanitize_text_field((string) ($input['client_name'] ?? '')),
-            'client_email'  => sanitize_email((string) ($input['client_email'] ?? '')),
-            'access_token'  => sanitize_text_field((string) ($input['access_token'] ?? '')),
-            'token_expiry'  => sanitize_text_field((string) ($input['token_expiry'] ?? '')),
-            'last_check'    => $existing['last_check'],
-            'last_status'   => $existing['last_status'],
-            'last_message'  => $existing['last_message'],
+            'client_name'  => $new_name,
+            'client_email' => $new_email,
+            'access_token' => $new_token,
+            'token_expiry' => $new_expiry,
+            'repositories' => $repositories,
+            'last_check'   => $last_check,
+            'last_status'  => $last_status,
+            'last_message' => $last_message,
         ];
     }
 
@@ -91,8 +127,8 @@ class YWHH_Access_Manager
     public function perform_token_check(): bool
     {
         $settings = $this->get_settings();
-        if ($settings['access_token'] === '' || $settings['client_email'] === '') {
-            $this->store_status('invalid', __('Missing token or email.', 'yuna-wordpress-helper'));
+        if ($settings['access_token'] === '') {
+            $this->store_status('invalid', __('Missing access token.', 'yuna-wordpress-helper'), []);
 
             return false;
         }
@@ -100,19 +136,17 @@ class YWHH_Access_Manager
         $response = wp_remote_post(self::VERIFY_ENDPOINT, [
             'timeout' => 20,
             'headers' => [
-                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'Accept'       => 'application/json',
             ],
-            'body' => [
-                'name'   => $settings['client_name'],
-                'email'  => $settings['client_email'],
-                'token'  => $settings['access_token'],
-                'expiry' => $settings['token_expiry'],
-                'site'   => home_url('/'),
-            ],
+            'body' => wp_json_encode([
+                'token' => $settings['access_token'],
+                'site'  => home_url('/'),
+            ]),
         ]);
 
         if (is_wp_error($response)) {
-            $this->store_status('invalid', __('Unable to reach token server.', 'yuna-wordpress-helper'));
+            $this->store_status('invalid', __('Unable to reach token server.', 'yuna-wordpress-helper'), []);
 
             return false;
         }
@@ -128,18 +162,43 @@ class YWHH_Access_Manager
             $message = sanitize_text_field((string) $body['reason']);
         }
 
-        $this->store_status($is_valid ? 'valid' : 'invalid', $message);
+        $repositories = $is_valid && is_array($body) && isset($body['repositories']) && is_array($body['repositories'])
+            ? $this->sanitize_repository_urls($body['repositories'])
+            : [];
+
+        $this->store_status($is_valid ? 'valid' : 'invalid', $message, $repositories);
 
         return $is_valid;
     }
 
-    private function store_status(string $status, string $message): void
+    private function store_status(string $status, string $message, array $repositories): void
     {
         $settings = $this->get_settings();
         $settings['last_check'] = gmdate('c');
         $settings['last_status'] = $status;
         $settings['last_message'] = $message;
+        $settings['repositories'] = $repositories;
 
         update_option(self::OPTION_KEY, $settings, false);
+    }
+
+    private function sanitize_repository_urls(array $repositories): array
+    {
+        $urls = [];
+
+        foreach ($repositories as $repository) {
+            $url = esc_url_raw((string) $repository);
+            if (! preg_match('#^https://github\.com/maximebellefleur/yuna-[a-z0-9._-]+/?$#i', $url)) {
+                continue;
+            }
+
+            if (preg_match('#/yuna-wordpress-helper/?$#i', $url)) {
+                continue;
+            }
+
+            $urls[] = untrailingslashit($url);
+        }
+
+        return array_values(array_unique($urls));
     }
 }
