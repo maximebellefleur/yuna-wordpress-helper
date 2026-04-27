@@ -3,7 +3,7 @@
  * Plugin Name: Yuna WordPress Helper
  * Plugin URI: https://maximebellefleur.com/yunadesign
  * Description: Manage yuna-* plugin repositories from one simple admin page.
- * Version: 0.3.2
+ * Version: 0.3.11
  * Author: Yuna
  * License: GPL-2.0-or-later
  * Requires at least: 6.0
@@ -14,7 +14,7 @@ if (! defined('ABSPATH')) {
     exit;
 }
 
-define('YWHH_VERSION', '0.3.2');
+define('YWHH_VERSION', '0.3.11');
 define('YWHH_PLUGIN_FILE', __FILE__);
 define('YWHH_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('YWHH_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -90,7 +90,7 @@ final class YWHH_Plugin
         wp_enqueue_style('ywhh-admin-style', YWHH_PLUGIN_URL . 'assets/ywhh-admin.css', [], YWHH_VERSION);
     }
 
-    public function sync_auto_update_setting(bool $update, $item): bool
+    public function sync_auto_update_setting($update, $item)
     {
         if (! is_object($item) || empty($item->plugin)) {
             return $update;
@@ -114,7 +114,11 @@ final class YWHH_Plugin
         $managed = get_option(YWHH_Admin::MANAGED_PLUGINS_OPTION, []);
         $state = is_array($managed) ? ($managed[$update_uri] ?? null) : null;
 
-        return is_array($state) && ! empty($state['enabled']) && ! empty($state['auto_update']);
+        if (! is_array($state) || empty($state['enabled']) || empty($state['auto_update'])) {
+            return $update;
+        }
+
+        return $this->access_manager->perform_token_check();
     }
 }
 
