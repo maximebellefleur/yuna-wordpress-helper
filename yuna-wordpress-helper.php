@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Yuna WordPress Helper
  * Plugin URI: https://maximebellefleur.com/yunadesign
- * Description: Manage yuna-* plugin repositories from one simple admin page.
+ * Description: Manage yuna-* and innsight-* plugin repositories from one simple admin page.
  * Version: 0.3.11
  * Author: Yuna
  * License: GPL-2.0-or-later
@@ -22,7 +22,6 @@ define('YWHH_PLUGIN_URL', plugin_dir_url(__FILE__));
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-github-client.php';
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-plugin-catalog.php';
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-access-manager.php';
-require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-password-reset.php';
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-admin.php';
 
 final class YWHH_Plugin

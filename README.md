@@ -1,6 +1,6 @@
 # Yuna WordPress Helper
 
-Simple control center for your `yuna-` plugin repositories.
+Simple control center for your `yuna-` and `innsight-` plugin repositories.
 
 ## How it works
 
@@ -9,7 +9,7 @@ Simple control center for your `yuna-` plugin repositories.
 3. Enter the raw access token shown once by the minisite.
 4. Before protected actions, helper verifies access at:
    - `POST https://maximebellefleur.com/yunadesign/helper/api/verify-token`
-5. The verification response returns current authorized `yuna-` plugin repository links under `https://github.com/maximebellefleur/`, excluding `yuna-wordpress-helper`.
+5. The verification response returns current authorized `yuna-` and `innsight-` plugin repository links under `https://github.com/maximebellefleur/`, excluding `yuna-wordpress-helper`.
 6. Helper lists verified repositories with a latest release.
 7. From the list, you can:
    - install/update + activate plugin,
