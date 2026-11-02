@@ -22,7 +22,6 @@ define('YWHH_PLUGIN_URL', plugin_dir_url(__FILE__));
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-github-client.php';
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-plugin-catalog.php';
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-access-manager.php';
-require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-password-reset.php';
 require_once YWHH_PLUGIN_DIR . 'includes/class-ywhh-admin.php';
 
 final class YWHH_Plugin
