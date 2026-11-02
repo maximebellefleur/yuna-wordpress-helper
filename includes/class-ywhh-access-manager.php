@@ -188,7 +188,7 @@ class YWHH_Access_Manager
 
         foreach ($repositories as $repository) {
             $url = esc_url_raw((string) $repository);
-            if (! preg_match('#^https://github\.com/maximebellefleur/yuna-[a-z0-9._-]+/?$#i', $url)) {
+            if (! preg_match('#^https://github\.com/maximebellefleur/(?:yuna|innsight)-[a-z0-9._-]+/?$#i', $url)) {
                 continue;
             }
 

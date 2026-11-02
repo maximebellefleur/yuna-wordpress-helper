@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Yuna WordPress Helper
  * Plugin URI: https://maximebellefleur.com/yunadesign
- * Description: Manage yuna-* plugin repositories from one simple admin page.
+ * Description: Manage yuna-* and innsight-* plugin repositories from one simple admin page.
  * Version: 0.3.11
  * Author: Yuna
  * License: GPL-2.0-or-later

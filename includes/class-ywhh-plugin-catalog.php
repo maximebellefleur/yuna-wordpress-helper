@@ -127,9 +127,9 @@ class YWHH_Plugin_Catalog
             $name_slug = $this->normalize_plugin_slug((string) ($plugin['Name'] ?? ''));
 
             if (
-                ! preg_match('#^yuna-[a-z0-9._-]+$#', $plugin_slug)
-                && ! preg_match('#^yuna-[a-z0-9._-]+$#', $file_slug)
-                && ! preg_match('#^yuna-[a-z0-9._-]+$#', $name_slug)
+                ! preg_match('#^(?:yuna|innsight)-[a-z0-9._-]+$#', $plugin_slug)
+                && ! preg_match('#^(?:yuna|innsight)-[a-z0-9._-]+$#', $file_slug)
+                && ! preg_match('#^(?:yuna|innsight)-[a-z0-9._-]+$#', $name_slug)
             ) {
                 continue;
             }
@@ -140,7 +140,7 @@ class YWHH_Plugin_Catalog
             ];
 
             foreach ([$plugin_slug, $file_slug, $name_slug] as $slug) {
-                if (preg_match('#^yuna-[a-z0-9._-]+$#', $slug)) {
+                if (preg_match('#^(?:yuna|innsight)-[a-z0-9._-]+$#', $slug)) {
                     $map[$slug] = $plugin_info;
                 }
             }
@@ -152,7 +152,7 @@ class YWHH_Plugin_Catalog
                 $update_uri_path = (string) wp_parse_url($normalized_update_uri, PHP_URL_PATH);
                 $update_uri_parts = array_values(array_filter(explode('/', trim($update_uri_path, '/'))));
                 $update_uri_slug = $this->normalize_plugin_slug((string) end($update_uri_parts));
-                if (preg_match('#^yuna-[a-z0-9._-]+$#', $update_uri_slug)) {
+                if (preg_match('#^(?:yuna|innsight)-[a-z0-9._-]+$#', $update_uri_slug)) {
                     $map[$update_uri_slug] = $plugin_info;
                 }
             }
@@ -167,7 +167,7 @@ class YWHH_Plugin_Catalog
 
         foreach ($repository_urls as $repository_url) {
             $url = esc_url_raw((string) $repository_url);
-            if (! preg_match('#^https://github\.com/maximebellefleur/yuna-[a-z0-9._-]+/?$#i', $url)) {
+            if (! preg_match('#^https://github\.com/maximebellefleur/(?:yuna|innsight)-[a-z0-9._-]+/?$#i', $url)) {
                 continue;
             }
 
@@ -205,7 +205,7 @@ class YWHH_Plugin_Catalog
         $slug = preg_replace('#[^a-z0-9]+#', '-', $slug);
         $slug = trim((string) $slug, '-');
 
-        if (preg_match('#^(yuna-[a-z0-9-]*?[a-z])(?:[-_.]?(?:v)?\d+(?:[-_.]\d+)*)?$#', $slug, $matches)) {
+        if (preg_match('#^((?:yuna|innsight)-[a-z0-9-]*?[a-z])(?:[-_.]?(?:v)?\d+(?:[-_.]\d+)*)?$#', $slug, $matches)) {
             return $matches[1];
         }
 

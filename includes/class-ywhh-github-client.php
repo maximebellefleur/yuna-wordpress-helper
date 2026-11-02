@@ -39,8 +39,10 @@ class YWHH_GitHub_Client
             $name = strtolower((string) $repo['name']);
             $full_name = strtolower((string) ($repo['full_name'] ?? ''));
 
-            return strpos($name, 'yuna-') === 0
-                && strpos($full_name, 'maximebellefleur/yuna-') === 0
+            $has_prefix = strpos($name, 'yuna-') === 0 || strpos($name, 'innsight-') === 0;
+
+            return $has_prefix
+                && strpos($full_name, 'maximebellefleur/') === 0
                 && $name !== 'yuna-wordpress-helper';
         }));
     }
